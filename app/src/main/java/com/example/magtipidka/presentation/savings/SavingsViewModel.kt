@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class SavingsViewModel(
     private val savingsGoalRepository: SavingsGoalRepository,
@@ -151,9 +152,16 @@ class SavingsViewModel(
         if (name.isEmpty()) { _errorMessage.value = "Please enter a goal name."; return }
 
         val targetVal = _targetAmountInput.value.toDoubleOrNull()
-        if (targetVal == null || targetVal <= 0) { _errorMessage.value = "Please enter a valid target amount."; return }
+        if (targetVal == null || targetVal <= 0) { _errorMessage.value = "Please enter a valid target amount greater than zero."; return }
 
         val currentVal = _currentAmountInput.value.toDoubleOrNull() ?: 0.0
+        if (currentVal < 0) { _errorMessage.value = "Initial saved amount cannot be negative."; return }
+
+        val symbol = _uiState.value.currencySymbol
+        if (currentVal > targetVal) {
+            _errorMessage.value = "Initial saved amount ($symbol${formatAmount(currentVal)}) exceeds the target goal limit of $symbol${formatAmount(targetVal)}."
+            return
+        }
 
         val goal = SavingsGoal(
             id = _editingGoal.value?.id ?: 0L,
@@ -196,11 +204,24 @@ class SavingsViewModel(
     fun onSaveContribution() {
         val amountVal = _contributionAmountInput.value.toDoubleOrNull()
         if (amountVal == null || amountVal <= 0) {
-            _errorMessage.value = "Please enter a valid contribution amount."
+            _errorMessage.value = "Please enter a valid contribution amount greater than zero."
             return
         }
 
         val goal = _contributingGoal.value ?: return
+        val symbol = _uiState.value.currencySymbol
+        val remainingNeeded = (goal.targetAmount - goal.currentAmount).coerceAtLeast(0.0)
+
+        if (goal.currentAmount >= goal.targetAmount) {
+            _errorMessage.value = "Goal '${goal.name}' has already reached its target limit of $symbol${formatAmount(goal.targetAmount)}!"
+            return
+        }
+
+        if (amountVal > remainingNeeded) {
+            _errorMessage.value = "Deposit ($symbol${formatAmount(amountVal)}) exceeds the savings goal target limit of $symbol${formatAmount(goal.targetAmount)}. Maximum deposit allowed is $symbol${formatAmount(remainingNeeded)}."
+            return
+        }
+
         viewModelScope.launch {
             try {
                 updateSavingsGoalUseCase.addContribution(goal.id, amountVal)
@@ -209,6 +230,10 @@ class SavingsViewModel(
                 _errorMessage.value = e.message ?: "Failed to add contribution."
             }
         }
+    }
+
+    private fun formatAmount(value: Double): String {
+        return String.format(Locale.US, "%,.2f", value)
     }
 
     fun onDeleteGoal(goal: SavingsGoal) {

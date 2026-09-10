@@ -70,6 +70,7 @@ fun BudgetScreen(
             uiState = uiState,
             onAmountChanged = { viewModel.onInputAmountChanged(it) },
             onCategorySelected = { viewModel.onCategorySelected(it) },
+            onPeriodSelected = { viewModel.onBudgetPeriodSelected(it) },
             onSave = { viewModel.onSaveBudget() },
             onDismiss = { viewModel.onDismissBudgetDialog() }
         )
@@ -129,10 +130,42 @@ fun BudgetScreen(
             ) {
                 item { Spacer(modifier = Modifier.height(4.dp)) }
 
-                // Overall Monthly Budget Hero
+                // Budget Period Selector (Monthly / Weekly / Daily) Filter Chips
                 item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = uiState.selectedPeriod == BudgetPeriod.MONTHLY,
+                            onClick = { viewModel.onBudgetPeriodSelected(BudgetPeriod.MONTHLY) },
+                            label = { Text("Monthly", fontWeight = FontWeight.Bold) },
+                            shape = CircleShape
+                        )
+                        FilterChip(
+                            selected = uiState.selectedPeriod == BudgetPeriod.WEEKLY,
+                            onClick = { viewModel.onBudgetPeriodSelected(BudgetPeriod.WEEKLY) },
+                            label = { Text("Weekly", fontWeight = FontWeight.Bold) },
+                            shape = CircleShape
+                        )
+                        FilterChip(
+                            selected = uiState.selectedPeriod == BudgetPeriod.DAILY,
+                            onClick = { viewModel.onBudgetPeriodSelected(BudgetPeriod.DAILY) },
+                            label = { Text("Daily", fontWeight = FontWeight.Bold) },
+                            shape = CircleShape
+                        )
+                    }
+                }
+
+                // Overall Budget Hero
+                item {
+                    val periodTitle = when (uiState.selectedPeriod) {
+                        BudgetPeriod.MONTHLY -> "Monthly Budget Overview"
+                        BudgetPeriod.WEEKLY -> "Weekly Allowance Overview"
+                        BudgetPeriod.DAILY -> "Daily Spend Limit Overview"
+                    }
                     Text(
-                        text = "Monthly Overview",
+                        text = periodTitle,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -140,6 +173,12 @@ fun BudgetScreen(
 
                 item {
                     val overall = uiState.overallBudgetProgress
+                    val cardTitle = when (uiState.selectedPeriod) {
+                        BudgetPeriod.MONTHLY -> "Overall Monthly Budget"
+                        BudgetPeriod.WEEKLY -> "Overall Weekly Budget"
+                        BudgetPeriod.DAILY -> "Overall Daily Spend Limit"
+                    }
+
                     if (overall != null) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -150,7 +189,7 @@ fun BudgetScreen(
                         ) {
                             Column(modifier = Modifier.padding(18.dp)) {
                                 ProgressBarCard(
-                                    title = "Overall Monthly Budget",
+                                    title = cardTitle,
                                     currentAmount = overall.spentAmount,
                                     targetAmount = overall.budget.amount,
                                     currencySymbol = uiState.currencySymbol,
@@ -198,12 +237,12 @@ fun BudgetScreen(
                             ) {
                                 Column {
                                     Text(
-                                        text = "Set Monthly Allowance Budget",
+                                        text = "Set Overall Allowance Budget",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Track your total spending target for this month",
+                                        text = "Plan your total spending target for this period",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -249,13 +288,46 @@ fun BudgetScreen(
                         )
                     }
                 } else {
-                    items(uiState.categoryBudgetProgresses, key = { it.budget.id }) { catProgress ->
-                        CategoryBudgetListItem(
-                            progress = catProgress,
-                            currencySymbol = uiState.currencySymbol,
-                            onEdit = { viewModel.onOpenAddCategoryBudgetDialog(catProgress) },
-                            onDelete = { viewModel.onDeleteBudget(catProgress.budget) }
-                        )
+                    items(uiState.categoryBudgetProgresses, key = { it.budget.id }) { progress ->
+                        val categoryName = progress.budget.categoryName ?: "Category"
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.30f)),
+                            shadowElevation = 0.dp
+                        ) {
+                            Column(modifier = Modifier.padding(18.dp)) {
+                                ProgressBarCard(
+                                    title = categoryName,
+                                    currentAmount = progress.spentAmount,
+                                    targetAmount = progress.budget.amount,
+                                    currencySymbol = uiState.currencySymbol,
+                                    progressPercentage = progress.progressPercentage,
+                                    isExceeded = progress.isExceeded
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    IconButton(onClick = { viewModel.onOpenAddCategoryBudgetDialog(progress) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit Category Budget",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    IconButton(onClick = { viewModel.onDeleteBudget(progress.budget) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Delete Category Budget",
+                                            tint = ExpenseRed
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -266,99 +338,98 @@ fun BudgetScreen(
 }
 
 @Composable
-fun CategoryBudgetListItem(
-    progress: BudgetProgress,
-    currencySymbol: String,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.30f)),
-        shadowElevation = 0.dp
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            ProgressBarCard(
-                title = progress.budget.categoryName ?: "Category Budget",
-                currentAmount = progress.spentAmount,
-                targetAmount = progress.budget.amount,
-                currencySymbol = currencySymbol,
-                progressPercentage = progress.progressPercentage,
-                isExceeded = progress.isExceeded
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = ExpenseRed
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AddEditBudgetDialog(
+private fun AddEditBudgetDialog(
     uiState: BudgetUiState,
     onAmountChanged: (String) -> Unit,
     onCategorySelected: (Long) -> Unit,
+    onPeriodSelected: (BudgetPeriod) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var categoryDropdownExpanded by remember { mutableStateOf(false) }
+    val isEditing = uiState.editingBudgetProgress != null
+    val isCategoryMode = uiState.isCategoryBudgetMode
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val selectedCategoryName = uiState.expenseCategories.find { it.id == uiState.selectedCategoryId }?.name ?: "Select Category"
+
+    val periodLabel = when (uiState.selectedPeriod) {
+        BudgetPeriod.DAILY -> "Daily"
+        BudgetPeriod.WEEKLY -> "Weekly"
+        BudgetPeriod.MONTHLY -> "Monthly"
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (uiState.isCategoryBudgetMode) "Set Category Budget" else "Set Monthly Budget",
+                text = when {
+                    isEditing && isCategoryMode -> "Edit Category Budget ($periodLabel)"
+                    isEditing -> "Edit Overall Budget ($periodLabel)"
+                    isCategoryMode -> "Set Category Budget ($periodLabel)"
+                    else -> "Set Overall Budget ($periodLabel)"
+                },
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (uiState.isCategoryBudgetMode) {
+                // Period Cycle Goal Choice FilterChips
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Select Category",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
+                        text = "Select Budget Cycle Goal:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
 
-                    Box {
-                        val selectedCategory = uiState.expenseCategories.find { it.id == uiState.selectedCategoryId }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         FilterChip(
-                            selected = true,
-                            onClick = { categoryDropdownExpanded = true },
-                            label = { Text(selectedCategory?.name ?: "Select Category") },
-                            shape = CircleShape
+                            selected = uiState.selectedPeriod == BudgetPeriod.DAILY,
+                            onClick = { onPeriodSelected(BudgetPeriod.DAILY) },
+                            label = { Text("Daily", style = MaterialTheme.typography.labelMedium) },
+                            shape = CircleShape,
+                            modifier = Modifier.weight(1f)
                         )
+                        FilterChip(
+                            selected = uiState.selectedPeriod == BudgetPeriod.WEEKLY,
+                            onClick = { onPeriodSelected(BudgetPeriod.WEEKLY) },
+                            label = { Text("Weekly", style = MaterialTheme.typography.labelMedium) },
+                            shape = CircleShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = uiState.selectedPeriod == BudgetPeriod.MONTHLY,
+                            onClick = { onPeriodSelected(BudgetPeriod.MONTHLY) },
+                            label = { Text("Monthly", style = MaterialTheme.typography.labelMedium) },
+                            shape = CircleShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                if (isCategoryMode) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { dropdownExpanded = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(selectedCategoryName, fontWeight = FontWeight.Bold)
+                        }
 
                         DropdownMenu(
-                            expanded = categoryDropdownExpanded,
-                            onDismissRequest = { categoryDropdownExpanded = false }
+                            expanded = dropdownExpanded,
+                            onDismissRequest = { dropdownExpanded = false }
                         ) {
                             uiState.expenseCategories.forEach { category ->
                                 DropdownMenuItem(
                                     text = { Text(category.name) },
                                     onClick = {
                                         onCategorySelected(category.id)
-                                        categoryDropdownExpanded = false
+                                        dropdownExpanded = false
                                     }
                                 )
                             }
@@ -369,12 +440,11 @@ fun AddEditBudgetDialog(
                 OutlinedTextField(
                     value = uiState.inputAmount,
                     onValueChange = onAmountChanged,
-                    label = { Text("Budget Amount (${uiState.currencySymbol})") },
+                    label = { Text("Target $periodLabel Amount (${uiState.currencySymbol})") },
                     prefix = { Text("${uiState.currencySymbol} ", fontWeight = FontWeight.Bold) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = RoundedCornerShape(16.dp),
                     singleLine = true,
-                    isError = uiState.errorMessage != null,
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -389,7 +459,7 @@ fun AddEditBudgetDialog(
         },
         confirmButton = {
             Button(onClick = onSave, shape = CircleShape) {
-                Text("Save Budget")
+                Text("Save $periodLabel Budget")
             }
         },
         dismissButton = {

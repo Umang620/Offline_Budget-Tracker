@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.magtipidka.domain.model.Budget
 import com.example.magtipidka.domain.model.CategoryType
+import com.example.magtipidka.domain.model.TransactionType
 import com.example.magtipidka.domain.repository.CategoryRepository
 import com.example.magtipidka.domain.repository.SettingsRepository
+import com.example.magtipidka.domain.repository.TransactionRepository
 import com.example.magtipidka.domain.usecase.budget.BudgetProgress
 import com.example.magtipidka.domain.usecase.budget.CalculateBudgetProgressUseCase
 import com.example.magtipidka.domain.usecase.budget.DeleteBudgetUseCase
@@ -27,12 +29,14 @@ class BudgetViewModel(
     private val deleteBudgetUseCase: DeleteBudgetUseCase,
     private val calculateBudgetProgressUseCase: CalculateBudgetProgressUseCase,
     private val categoryRepository: CategoryRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val transactionRepository: TransactionRepository
 ) : ViewModel() {
 
     private val cal = Calendar.getInstance()
     private val _month = MutableStateFlow(cal.get(Calendar.MONTH) + 1)
     private val _year = MutableStateFlow(cal.get(Calendar.YEAR))
+    private val _selectedPeriod = MutableStateFlow(BudgetPeriod.MONTHLY)
 
     private val _isAddEditBudgetDialogOpen = MutableStateFlow(false)
     private val _editingBudgetProgress = MutableStateFlow<BudgetProgress?>(null)
@@ -49,13 +53,85 @@ class BudgetViewModel(
     }
 
     private fun observeBudgetData() {
-        val dateFlow = combine(_month, _year) { m, y -> Pair(m, y) }
+        val dateAndPeriodFlow = combine(_month, _year, _selectedPeriod) { m, y, p -> Triple(m, y, p) }
+
+        val monthlyTransactionsFlow = transactionRepository.getTransactionsByMonthYear(_month.value, _year.value)
 
         val budgetProgressFlow = combine(
             calculateBudgetProgressUseCase.forOverall(_month.value, _year.value),
-            calculateBudgetProgressUseCase.forCategoryBudgets(_month.value, _year.value)
-        ) { overall, categoryBudgets ->
-            Pair(overall, categoryBudgets)
+            calculateBudgetProgressUseCase.forCategoryBudgets(_month.value, _year.value),
+            monthlyTransactionsFlow,
+            _selectedPeriod
+        ) { overallMonthly, categoryMonthlyBudgets, transactions, period ->
+            val nowCal = Calendar.getInstance()
+            val todayDay = nowCal.get(Calendar.DAY_OF_MONTH)
+            val currentWeek = nowCal.get(Calendar.WEEK_OF_YEAR)
+            val daysInMonth = nowCal.getActualMaximum(Calendar.DAY_OF_MONTH).toDouble().coerceAtLeast(1.0)
+
+            val expenseTransactions = transactions.filter { it.type == TransactionType.EXPENSE }
+
+            val todayExpenses = expenseTransactions.filter { t ->
+                val c = Calendar.getInstance().apply { timeInMillis = t.date }
+                c.get(Calendar.DAY_OF_MONTH) == todayDay
+            }
+
+            val weekExpenses = expenseTransactions.filter { t ->
+                val c = Calendar.getInstance().apply { timeInMillis = t.date }
+                c.get(Calendar.WEEK_OF_YEAR) == currentWeek
+            }
+
+            // Scale Overall Budget
+            val scaledOverall = if (overallMonthly != null) {
+                val targetAmount = when (period) {
+                    BudgetPeriod.MONTHLY -> overallMonthly.budget.amount
+                    BudgetPeriod.WEEKLY -> overallMonthly.budget.amount / 4.0
+                    BudgetPeriod.DAILY -> overallMonthly.budget.amount / daysInMonth
+                }
+
+                val spent = when (period) {
+                    BudgetPeriod.MONTHLY -> overallMonthly.spentAmount
+                    BudgetPeriod.WEEKLY -> weekExpenses.sumOf { it.amount }
+                    BudgetPeriod.DAILY -> todayExpenses.sumOf { it.amount }
+                }
+
+                val remaining = targetAmount - spent
+                val progress = if (targetAmount > 0) (spent / targetAmount).toFloat() else 0f
+                BudgetProgress(
+                    budget = overallMonthly.budget.copy(amount = targetAmount),
+                    spentAmount = spent,
+                    remainingAmount = remaining,
+                    progressPercentage = progress,
+                    isExceeded = spent > targetAmount
+                )
+            } else null
+
+            // Scale Category Budgets
+            val scaledCategories = categoryMonthlyBudgets.map { catProgress ->
+                val catId = catProgress.budget.categoryId
+                val targetAmount = when (period) {
+                    BudgetPeriod.MONTHLY -> catProgress.budget.amount
+                    BudgetPeriod.WEEKLY -> catProgress.budget.amount / 4.0
+                    BudgetPeriod.DAILY -> catProgress.budget.amount / daysInMonth
+                }
+
+                val spent = when (period) {
+                    BudgetPeriod.MONTHLY -> catProgress.spentAmount
+                    BudgetPeriod.WEEKLY -> weekExpenses.filter { it.categoryId == catId }.sumOf { it.amount }
+                    BudgetPeriod.DAILY -> todayExpenses.filter { it.categoryId == catId }.sumOf { it.amount }
+                }
+
+                val remaining = targetAmount - spent
+                val progress = if (targetAmount > 0) (spent / targetAmount).toFloat() else 0f
+                BudgetProgress(
+                    budget = catProgress.budget.copy(amount = targetAmount),
+                    spentAmount = spent,
+                    remainingAmount = remaining,
+                    progressPercentage = progress,
+                    isExceeded = spent > targetAmount
+                )
+            }
+
+            Pair(scaledOverall, scaledCategories)
         }
 
         val metaFlow = combine(
@@ -76,14 +152,15 @@ class BudgetViewModel(
         }
 
         combine(
-            dateFlow,
+            dateAndPeriodFlow,
             budgetProgressFlow,
             metaFlow,
             dialogStateFlow,
             _errorMessage
-        ) { date, budget, meta, dialog, error ->
-            val m = date.first
-            val y = date.second
+        ) { dateAndPeriod, budget, meta, dialog, error ->
+            val m = dateAndPeriod.first
+            val y = dateAndPeriod.second
+            val p = dateAndPeriod.third
             val monthNames = DateFormatSymbols(Locale.ENGLISH).months
             val mName = "${monthNames.getOrElse(m - 1) { "" }} $y"
 
@@ -92,6 +169,7 @@ class BudgetViewModel(
                 month = m,
                 year = y,
                 monthName = mName,
+                selectedPeriod = p,
                 currencySymbol = meta.second.currencySymbol,
                 overallBudgetProgress = budget.first,
                 categoryBudgetProgresses = budget.second,
@@ -115,6 +193,10 @@ class BudgetViewModel(
         val catId: Long?,
         val inputAmt: String
     )
+
+    fun onBudgetPeriodSelected(period: BudgetPeriod) {
+        _selectedPeriod.value = period
+    }
 
     fun onOpenAddOverallBudgetDialog() {
         val currentOverall = _uiState.value.overallBudgetProgress
@@ -163,10 +245,19 @@ class BudgetViewModel(
             return
         }
 
+        val period = _selectedPeriod.value
+        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH).toDouble().coerceAtLeast(1.0)
+
+        val monthlyAmount = when (period) {
+            BudgetPeriod.MONTHLY -> amountVal
+            BudgetPeriod.WEEKLY -> amountVal * 4.0
+            BudgetPeriod.DAILY -> amountVal * daysInMonth
+        }
+
         val budget = Budget(
             id = _editingBudgetProgress.value?.budget?.id ?: 0L,
             categoryId = catId,
-            amount = amountVal,
+            amount = monthlyAmount,
             month = _month.value,
             year = _year.value
         )
@@ -192,7 +283,8 @@ class BudgetViewModel(
         private val deleteBudgetUseCase: DeleteBudgetUseCase,
         private val calculateBudgetProgressUseCase: CalculateBudgetProgressUseCase,
         private val categoryRepository: CategoryRepository,
-        private val settingsRepository: SettingsRepository
+        private val settingsRepository: SettingsRepository,
+        private val transactionRepository: TransactionRepository
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -201,7 +293,8 @@ class BudgetViewModel(
                 deleteBudgetUseCase,
                 calculateBudgetProgressUseCase,
                 categoryRepository,
-                settingsRepository
+                settingsRepository,
+                transactionRepository
             ) as T
         }
     }

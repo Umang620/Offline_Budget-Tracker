@@ -8,9 +8,16 @@ import com.example.magtipidka.domain.model.TipidScore
 import com.example.magtipidka.domain.model.Transaction
 import com.example.magtipidka.domain.usecase.budget.BudgetProgress
 
+enum class DashboardTab {
+    OVERVIEW,
+    BUDGETS_GOALS,
+    COMMITMENTS
+}
+
 data class DashboardUiState(
     val isLoading: Boolean = true,
     val currencySymbol: String = "₱",
+    val selectedTab: DashboardTab = DashboardTab.OVERVIEW,
     val currentBalance: Double = 0.0,
     val totalIncome: Double = 0.0,
     val totalExpenses: Double = 0.0,
@@ -27,4 +34,7 @@ data class DashboardUiState(
     val recentTransactions: List<Transaction> = emptyList(),
     val topCategoryExpenses: List<CategoryExpenseShare> = emptyList(),
     val savingsGoals: List<SavingsGoal> = emptyList()
-)
+) {
+    val netBalance: Double
+        get() = currentBalance - totalUtang + totalPautang
+}

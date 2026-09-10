@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.magtipidka.domain.model.Debt
 import com.example.magtipidka.domain.model.DebtType
@@ -222,24 +223,31 @@ fun DebtItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = debt.personName,
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = typeLabel,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = badgeColor
+                        color = badgeColor,
+                        maxLines = 1
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
                     text = formatCurrency(debt.amount, currencySymbol),
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -438,13 +446,54 @@ fun RecordPaymentDialog(
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val debt = uiState.payingDebt
+    val remaining = if (debt != null) (debt.amount - debt.paidAmount).coerceAtLeast(0.0) else 0.0
+    val isUtang = debt?.type == DebtType.IOWE
+    val typeLabel = if (isUtang) "Utang Balance" else "Pautang Receivable"
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Record Payment for '${uiState.payingDebt?.personName}'", fontWeight = FontWeight.Bold)
+            Text("Record Payment for '${debt?.personName}'", fontWeight = FontWeight.Bold)
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (debt != null) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = typeLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = formatCurrency(debt.amount, uiState.currencySymbol),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Unsettled Remaining: ${formatCurrency(remaining, uiState.currencySymbol)}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isUtang) ExpenseRed else IncomeGreen
+                    )
+                }
+
                 OutlinedTextField(
                     value = uiState.paymentAmountInput,
                     onValueChange = onAmountChanged,

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class DebtViewModel(
     private val debtRepository: DebtRepository,
@@ -162,13 +163,20 @@ class DebtViewModel(
         if (name.isEmpty()) { _errorMessage.value = "Please enter a person's name."; return }
 
         val amountVal = _amountInput.value.toDoubleOrNull()
-        if (amountVal == null || amountVal <= 0) { _errorMessage.value = "Please enter a valid amount."; return }
+        if (amountVal == null || amountVal <= 0) { _errorMessage.value = "Please enter a valid amount greater than zero."; return }
+
+        val editing = _editingDebt.value
+        val symbol = _uiState.value.currencySymbol
+        if (editing != null && amountVal < editing.paidAmount) {
+            _errorMessage.value = "Total debt amount ($symbol${formatAmount(amountVal)}) cannot be less than the already paid amount of $symbol${formatAmount(editing.paidAmount)}."
+            return
+        }
 
         val debt = Debt(
-            id = _editingDebt.value?.id ?: 0L,
+            id = editing?.id ?: 0L,
             personName = name,
             amount = amountVal,
-            paidAmount = _editingDebt.value?.paidAmount ?: 0.0,
+            paidAmount = editing?.paidAmount ?: 0.0,
             type = _typeInput.value,
             dueDate = _dueDateInput.value,
             note = _noteInput.value.trim()
@@ -207,11 +215,25 @@ class DebtViewModel(
     fun onSavePayment() {
         val amountVal = _paymentAmountInput.value.toDoubleOrNull()
         if (amountVal == null || amountVal <= 0) {
-            _errorMessage.value = "Please enter a valid payment amount."
+            _errorMessage.value = "Please enter a valid payment amount greater than zero."
             return
         }
 
         val debt = _payingDebt.value ?: return
+        val symbol = _uiState.value.currencySymbol
+        val remainingBalance = (debt.amount - debt.paidAmount).coerceAtLeast(0.0)
+
+        if (debt.isSettled || remainingBalance <= 0) {
+            _errorMessage.value = "This ${if (debt.type == DebtType.IOWE) "Utang" else "Pautang"} record is already fully settled!"
+            return
+        }
+
+        if (amountVal > remainingBalance) {
+            val recordType = if (debt.type == DebtType.IOWE) "Utang" else "Pautang"
+            _errorMessage.value = "Payment ($symbol${formatAmount(amountVal)}) exceeds the remaining $recordType balance of $symbol${formatAmount(remainingBalance)}. Maximum payment allowed is $symbol${formatAmount(remainingBalance)}."
+            return
+        }
+
         viewModelScope.launch {
             try {
                 debtRepository.recordPayment(debt.id, amountVal)
@@ -220,6 +242,10 @@ class DebtViewModel(
                 _errorMessage.value = e.message ?: "Failed to record payment."
             }
         }
+    }
+
+    private fun formatAmount(value: Double): String {
+        return String.format(Locale.US, "%,.2f", value)
     }
 
     fun onDeleteDebt(debt: Debt) {

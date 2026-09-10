@@ -1,6 +1,7 @@
 package com.example.magtipidka.data.repository
 
 import com.example.magtipidka.data.local.database.AppDatabase
+import com.example.magtipidka.data.local.database.DefaultCategories
 import com.example.magtipidka.data.mapper.toDomain
 import com.example.magtipidka.data.mapper.toEntity
 import com.example.magtipidka.domain.model.BackupData
@@ -71,6 +72,22 @@ class DataBackupRepositoryImpl(
                 billEntities.forEach { database.recurringBillDao().insertRecurringBill(it) }
             }
 
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    override suspend fun clearAllData(): Boolean {
+        return try {
+            database.transactionDao().deleteAllTransactions()
+            database.budgetDao().deleteAllBudgets()
+            database.savingsGoalDao().deleteAllSavingsGoals()
+            database.debtDao().deleteAllDebts()
+            database.recurringBillDao().deleteAllRecurringBills()
+            database.categoryDao().deleteAllCategories()
+            database.categoryDao().insertCategories(DefaultCategories.list)
             true
         } catch (e: Exception) {
             e.printStackTrace()

@@ -15,6 +15,8 @@ data class SettingsUiState(
     val pinInput: String = "",
     val pinConfirmInput: String = "",
     val pinErrorMessage: String? = null,
+    val isClearDataStep1Open: Boolean = false,
+    val isClearDataStep2Open: Boolean = false,
     val backupSuccessMessage: String? = null,
     val backupErrorMessage: String? = null
 )

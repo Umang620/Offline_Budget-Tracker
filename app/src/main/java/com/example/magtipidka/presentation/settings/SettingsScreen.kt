@@ -5,6 +5,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.Fingerprint
@@ -39,14 +41,17 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -191,6 +196,75 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = { viewModel.onDismissPinDialog() }) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Step 1 Clear Data Dialog
+    if (uiState.isClearDataStep1Open) {
+        AlertDialog(
+            onDismissRequest = { viewModel.onDismissClearDataDialogs() },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Clear App Data? (1/2)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            text = {
+                Text(
+                    text = "This action will delete all recorded transactions, budgets, savings goals, debts, and recurring bills from Mag Tipid Ka.\n\nYour preferences (theme, currency) will be preserved.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.onProceedToClearDataStep2() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = CircleShape
+                ) {
+                    Text("Continue to Step 2")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onDismissClearDataDialogs() }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Step 2 Final Confirmation Clear Data Dialog
+    if (uiState.isClearDataStep2Open) {
+        AlertDialog(
+            onDismissRequest = { viewModel.onDismissClearDataDialogs() },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Final Confirmation (2/2)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            text = {
+                Text(
+                    text = "🚨 Are you ABSOLUTELY SURE?\n\nAll your recorded financial history will be PERMANENTLY DELETED. This action CANNOT BE UNDONE!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.onConfirmClearAllData() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = CircleShape
+                ) {
+                    Text("Yes, Permanently Delete All Data")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onDismissClearDataDialogs() }) {
+                    Text("Cancel / Abort")
                 }
             }
         )
@@ -508,6 +582,17 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Import JSON")
                         }
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.onShowClearDataStep1() },
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                        shape = CircleShape,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Clear All Application Data", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                     }
                 }
             }

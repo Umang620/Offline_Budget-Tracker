@@ -22,9 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -160,14 +157,18 @@ fun IncomeVsExpenseBarChart(
     modifier: Modifier = Modifier
 ) {
     val maxVal = maxOf(income, expense, 1.0)
-    val incomeRatio = (income / maxVal).toFloat()
-    val expenseRatio = (expense / maxVal).toFloat()
+    val incomeRatio = (income / maxVal).toFloat().coerceIn(0.08f, 1.0f)
+    val expenseRatio = (expense / maxVal).toFloat().coerceIn(0.08f, 1.0f)
+
+    val incomePct = if (maxVal > 0) ((income / maxVal) * 100).toInt() else 0
+    val expensePct = if (maxVal > 0) ((expense / maxVal) * 100).toInt() else 0
 
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.30f)),
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.40f)),
+        tonalElevation = 2.dp,
         shadowElevation = 0.dp
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -179,49 +180,102 @@ fun IncomeVsExpenseBarChart(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            Canvas(
+            // Bar Graph with Left Y-Axis Percentage Labels & Horizontal Gridlines
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(130.dp)
+                    .height(170.dp)
             ) {
-                val barWidth = 44.dp.toPx()
-                val canvasWidth = size.width
-                val canvasHeight = size.height
-
-                val incomeBarHeight = canvasHeight * incomeRatio
-                val expenseBarHeight = canvasHeight * expenseRatio
-
-                val incomeX = (canvasWidth / 3) - (barWidth / 2)
-                val expenseX = (2 * canvasWidth / 3) - (barWidth / 2)
-
-                drawRoundRect(
-                    color = IncomeGreen,
-                    topLeft = Offset(incomeX, canvasHeight - incomeBarHeight),
-                    size = Size(barWidth, incomeBarHeight),
-                    cornerRadius = CornerRadius(12.dp.toPx())
-                )
-
-                drawRoundRect(
-                    color = ExpenseRed,
-                    topLeft = Offset(expenseX, canvasHeight - expenseBarHeight),
-                    size = Size(barWidth, expenseBarHeight),
-                    cornerRadius = CornerRadius(12.dp.toPx())
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "Income", style = MaterialTheme.typography.labelMedium, color = IncomeGreen, fontWeight = FontWeight.Bold)
-                    Text(text = formatCurrency(income, currencySymbol), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                // Left Y-Axis Percentage Scale Labels
+                Column(
+                    modifier = Modifier
+                        .height(130.dp)
+                        .padding(end = 8.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("100%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text("75%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text("50%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text("25%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text("0%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "Expense", style = MaterialTheme.typography.labelMedium, color = ExpenseRed, fontWeight = FontWeight.Bold)
-                    Text(text = formatCurrency(expense, currencySymbol), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
+                // Main Bar Canvas Area
+                Box(modifier = Modifier.weight(1f)) {
+                    // Subtle Horizontal Gridlines
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        repeat(5) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                            ) {}
+                        }
+                    }
+
+                    // Income & Expense Bars
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        // Income Bar Column
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "${formatCurrency(income, currencySymbol)} ($incomePct%)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = IncomeGreen
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Surface(
+                                modifier = Modifier
+                                    .width(48.dp)
+                                    .height((100 * incomeRatio).dp),
+                                shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
+                                color = IncomeGreen
+                            ) {}
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(text = "Income", style = MaterialTheme.typography.labelMedium, color = IncomeGreen, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Expense Bar Column
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "${formatCurrency(expense, currencySymbol)} ($expensePct%)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = ExpenseRed
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Surface(
+                                modifier = Modifier
+                                    .width(48.dp)
+                                    .height((100 * expenseRatio).dp),
+                                shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
+                                color = ExpenseRed
+                            ) {}
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(text = "Expense", style = MaterialTheme.typography.labelMedium, color = ExpenseRed, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }

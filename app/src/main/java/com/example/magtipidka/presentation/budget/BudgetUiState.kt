@@ -3,11 +3,18 @@ package com.example.magtipidka.presentation.budget
 import com.example.magtipidka.domain.model.Category
 import com.example.magtipidka.domain.usecase.budget.BudgetProgress
 
+enum class BudgetPeriod {
+    MONTHLY,
+    WEEKLY,
+    DAILY
+}
+
 data class BudgetUiState(
     val isLoading: Boolean = true,
     val month: Int = 1,
     val year: Int = 2026,
     val monthName: String = "January 2026",
+    val selectedPeriod: BudgetPeriod = BudgetPeriod.MONTHLY,
     val currencySymbol: String = "₱",
     val overallBudgetProgress: BudgetProgress? = null,
     val categoryBudgetProgresses: List<BudgetProgress> = emptyList(),

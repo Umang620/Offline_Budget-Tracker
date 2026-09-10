@@ -191,7 +191,8 @@ fun MainNavGraph(
                         container.deleteBudgetUseCase,
                         container.calculateBudgetProgressUseCase,
                         container.categoryRepository,
-                        container.settingsRepository
+                        container.settingsRepository,
+                        container.transactionRepository
                     )
                 )
                 BudgetScreen(viewModel = budgetViewModel)

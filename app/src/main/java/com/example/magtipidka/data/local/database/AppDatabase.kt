@@ -106,6 +106,16 @@ abstract class AppDatabase : RoomDatabase() {
                                 getDatabase(context).categoryDao().insertCategories(DefaultCategories.list)
                             }
                         }
+
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            CoroutineScope(Dispatchers.IO).launch {
+                                val dao = getDatabase(context).categoryDao()
+                                if (dao.getCategoryCount() == 0) {
+                                    dao.insertCategories(DefaultCategories.list)
+                                }
+                            }
+                        }
                     })
                     .fallbackToDestructiveMigration()
                     .build()

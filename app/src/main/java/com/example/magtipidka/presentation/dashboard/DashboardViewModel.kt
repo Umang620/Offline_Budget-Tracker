@@ -48,6 +48,7 @@ class DashboardViewModel(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
+    private val _selectedTab = MutableStateFlow(DashboardTab.OVERVIEW)
     private val _dueBillsForApproval = MutableStateFlow<List<RecurringBill>>(emptyList())
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -87,6 +88,10 @@ class DashboardViewModel(
         _dueBillsForApproval.value = _dueBillsForApproval.value.filter { it.id != bill.id }
     }
 
+    fun onTabSelected(tab: DashboardTab) {
+        _selectedTab.value = tab
+    }
+
     private fun observeDashboardData() {
         val cal = Calendar.getInstance()
         val currentMonth = cal.get(Calendar.MONTH) + 1
@@ -124,7 +129,7 @@ class DashboardViewModel(
             FinancialCommitments(utang, pautang, billsToPay, goals, dueBills)
         }
 
-        combine(flow1, flow2, flow3) { f1, f2, f3 ->
+        combine(flow1, flow2, flow3, _selectedTab) { f1, f2, f3, activeTab ->
             val settings = f1.settings
             val balance = f1.balance
             val monthlyIncome = f1.income
@@ -172,6 +177,7 @@ class DashboardViewModel(
             DashboardUiState(
                 isLoading = false,
                 currencySymbol = settings.currencySymbol,
+                selectedTab = activeTab,
                 currentBalance = balance,
                 totalIncome = monthlyIncome,
                 totalExpenses = monthlyExpenses,
